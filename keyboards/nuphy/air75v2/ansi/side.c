@@ -40,6 +40,7 @@ const uint8_t side_led_index_tab[SIDE_LINE] = {
 bool f_charging = 1;
 
 uint8_t side_play_point = 0;
+static bool side_color_wave_active = false;
 
 uint8_t low_bat_blink_cnt = 6;
 uint8_t side_play_cnt     = 0;
@@ -151,6 +152,7 @@ void side_mode_control(uint8_t dir) {
     }
 
     side_play_point = 0;
+    side_color_wave_active = false;
     save_config_to_eeprom();
 }
 
@@ -278,13 +280,17 @@ static void side_rainbow_wave_show(void) {
         if (b_temp < 16) b_temp = 0;
         count_rgb_light(side_light_table[keyboard_config.lights.side_brightness]);
         side_rgb_set_color(side_led_index_tab[i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
-        light_point_playing(1, 32, FLOW_COLOR_TAB_LEN, &index);
+        index = rainbow_wave_offset(index, 32);
     }
 }
 
 // A single-color pulse travels upward, separated from the next by darkness.
 static void side_color_wave_show(void) {
     static uint8_t hue;
+    if (!side_color_wave_active) {
+        side_play_point = COLOR_WAVE_START_PHASE;
+        side_color_wave_active = true;
+    }
     if (side_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed]) return;
     side_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed];
     if (side_play_cnt > 20) side_play_cnt = 0;

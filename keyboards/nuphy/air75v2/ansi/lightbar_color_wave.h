@@ -7,6 +7,8 @@
 #define COLOR_WAVE_WIDTH 48
 #define COLOR_WAVE_LED_SPACING 16
 #define COLOR_WAVE_HUE_CHANGE_PHASE 80
+// Start just before the pulse reaches the outermost LED.
+#define COLOR_WAVE_START_PHASE 112
 
 static inline uint8_t color_wave_advance(uint8_t phase, uint8_t *hue) {
     phase = (uint8_t)((phase + 1u) % COLOR_WAVE_PERIOD);
@@ -20,4 +22,9 @@ static inline uint8_t color_wave_intensity(uint8_t phase, uint8_t led) {
     if (pos >= COLOR_WAVE_WIDTH) return 0;
     // Fade in and out instead of hard edges.
     return (uint8_t)((pos < COLOR_WAVE_WIDTH / 2 ? pos : COLOR_WAVE_WIDTH - 1 - pos) * 255u / (COLOR_WAVE_WIDTH / 2 - 1));
+}
+
+// Add in a wider type so an 8-bit overflow cannot skip part of the palette.
+static inline uint8_t rainbow_wave_offset(uint8_t index, uint8_t step) {
+    return (uint8_t)(((uint16_t)index + step) % 224u);
 }

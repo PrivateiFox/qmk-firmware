@@ -20,6 +20,7 @@ const uint8_t logo_led_index_tab[LOGO_LINE] = {
 };
 
 uint8_t  logo_play_point = 0;
+static bool logo_color_wave_active = false;
 uint8_t  logo_play_cnt   = 0;
 uint32_t logo_play_timer = 0;
 
@@ -71,6 +72,7 @@ void ambient_mode_control(uint8_t dir) {
         }
     }
     logo_play_point = 0;
+    logo_color_wave_active = false;
     save_config_to_eeprom();
 }
 
@@ -166,12 +168,16 @@ static void logo_rainbow_wave_show(void) {
         if (b_temp < 16) b_temp = 0;
         logo_count_rgb_light(side_light_table[keyboard_config.lights.ambient_brightness]);
         side_rgb_set_color(logo_led_index_tab[LOGO_LINE - 1 - i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
-        logo_light_point_playing(1, 32, FLOW_COLOR_TAB_LEN, &index);
+        index = rainbow_wave_offset(index, 32);
     }
 }
 
 static void logo_color_wave_show(void) {
     static uint8_t hue;
+    if (!logo_color_wave_active) {
+        logo_play_point = COLOR_WAVE_START_PHASE;
+        logo_color_wave_active = true;
+    }
     if (logo_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed]) return;
     logo_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed];
     if (logo_play_cnt > 20) logo_play_cnt = 0;
