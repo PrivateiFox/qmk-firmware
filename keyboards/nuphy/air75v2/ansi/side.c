@@ -286,19 +286,21 @@ static void side_rainbow_wave_show(void) {
 
 // A single-color pulse travels upward, separated from the next by darkness.
 static void side_color_wave_show(void) {
-    static uint8_t hue;
+    static color_wave_state_t wave;
     if (!side_color_wave_active) {
-        side_play_point = COLOR_WAVE_START_PHASE;
+        color_wave_init(&wave);
         side_color_wave_active = true;
     }
     if (side_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed]) return;
     side_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed];
     if (side_play_cnt > 20) side_play_cnt = 0;
-    side_play_point = color_wave_advance(side_play_point, &hue);
-    rgb_t rgb = nuphy_picker_hsv_rgb(hue, 255, 255);
+    color_wave_advance(&wave);
+    rgb_t colors[2] = {nuphy_picker_hsv_rgb(wave.hue[0], 255, 255), nuphy_picker_hsv_rgb(wave.hue[1], 255, 255)};
     for (uint8_t i = 0; i < SIDE_LINE; i++) {
-        r_temp = rgb.r; g_temp = rgb.g; b_temp = rgb.b;
-        count_rgb_light(color_wave_intensity(side_play_point, i));
+        uint8_t pulse;
+        uint8_t intensity = color_wave_intensity(&wave, i, &pulse);
+        r_temp = colors[pulse].r; g_temp = colors[pulse].g; b_temp = colors[pulse].b;
+        count_rgb_light(intensity);
         count_rgb_light(side_light_table[keyboard_config.lights.side_brightness]);
         side_rgb_set_color(side_led_index_tab[i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
     }

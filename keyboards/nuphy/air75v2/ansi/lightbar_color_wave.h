@@ -1,30 +1,44 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
 
-// One 48-step pulse traverses six LEDs; a dark interval separates colors.
 #define COLOR_WAVE_PERIOD 192
 #define COLOR_WAVE_WIDTH 48
 #define COLOR_WAVE_LED_SPACING 16
-#define COLOR_WAVE_HUE_CHANGE_PHASE 80
-// Start just before the pulse reaches the outermost LED.
+#define COLOR_WAVE_PULSE_SPACING 96
 #define COLOR_WAVE_START_PHASE 112
 
-static inline uint8_t color_wave_advance(uint8_t phase, uint8_t *hue) {
-    phase = (uint8_t)((phase + 1u) % COLOR_WAVE_PERIOD);
-    // At this phase all six LEDs are dark, so a new color never appears mid-pulse.
-    if (phase == COLOR_WAVE_HUE_CHANGE_PHASE) *hue += 32;
-    return phase;
+typedef struct {
+    uint8_t phase;
+    uint8_t hue[2];
+    bool second_enabled;
+} color_wave_state_t;
+
+static inline void color_wave_init(color_wave_state_t *state) {
+    state->phase = COLOR_WAVE_START_PHASE;
+    state->hue[0] = 0;
+    state->hue[1] = 224; // first off-screen update makes the next color 32
+    state->second_enabled = false;
 }
 
-static inline uint8_t color_wave_intensity(uint8_t phase, uint8_t led) {
-    uint8_t pos = (uint8_t)((phase + (uint16_t)led * COLOR_WAVE_LED_SPACING) % COLOR_WAVE_PERIOD);
-    if (pos >= COLOR_WAVE_WIDTH) return 0;
-    // Fade in and out instead of hard edges.
+static inline void color_wave_advance(color_wave_state_t *state) {
+    state->phase = (uint8_t)((state->phase + 1u) % COLOR_WAVE_PERIOD);
+    // Introduce the second pulse only after it has passed off-screen on startup.
+    if (state->phase == 144) state->second_enabled = true;
+    // Change each pulse's color only while that pulse is off the bar.
+    if (state->phase == 80) state->hue[0] += 64;
+    if (state->phase == 176) state->hue[1] += 64;
+}
+
+static inline uint8_t color_wave_intensity(const color_wave_state_t *state, uint8_t led, uint8_t *pulse) {
+    uint8_t pos = (uint8_t)((state->phase + (uint16_t)led * COLOR_WAVE_LED_SPACING) % COLOR_WAVE_PERIOD);
+    *pulse = pos >= COLOR_WAVE_PULSE_SPACING;
+    if (*pulse) pos -= COLOR_WAVE_PULSE_SPACING;
+    if (pos >= COLOR_WAVE_WIDTH || (*pulse && !state->second_enabled)) return 0;
     return (uint8_t)((pos < COLOR_WAVE_WIDTH / 2 ? pos : COLOR_WAVE_WIDTH - 1 - pos) * 255u / (COLOR_WAVE_WIDTH / 2 - 1));
 }
 
-// Add in a wider type so an 8-bit overflow cannot skip part of the palette.
 static inline uint8_t rainbow_wave_offset(uint8_t index, uint8_t step) {
     return (uint8_t)(((uint16_t)index + step) % 224u);
 }

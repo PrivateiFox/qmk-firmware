@@ -173,19 +173,21 @@ static void logo_rainbow_wave_show(void) {
 }
 
 static void logo_color_wave_show(void) {
-    static uint8_t hue;
+    static color_wave_state_t wave;
     if (!logo_color_wave_active) {
-        logo_play_point = COLOR_WAVE_START_PHASE;
+        color_wave_init(&wave);
         logo_color_wave_active = true;
     }
     if (logo_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed]) return;
     logo_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed];
     if (logo_play_cnt > 20) logo_play_cnt = 0;
-    logo_play_point = color_wave_advance(logo_play_point, &hue);
-    rgb_t rgb = nuphy_picker_hsv_rgb(hue, 255, 255);
+    color_wave_advance(&wave);
+    rgb_t colors[2] = {nuphy_picker_hsv_rgb(wave.hue[0], 255, 255), nuphy_picker_hsv_rgb(wave.hue[1], 255, 255)};
     for (uint8_t i = 0; i < LOGO_LINE; i++) {
-        r_temp = rgb.r; g_temp = rgb.g; b_temp = rgb.b;
-        logo_count_rgb_light(color_wave_intensity(logo_play_point, i));
+        uint8_t pulse;
+        uint8_t intensity = color_wave_intensity(&wave, i, &pulse);
+        r_temp = colors[pulse].r; g_temp = colors[pulse].g; b_temp = colors[pulse].b;
+        logo_count_rgb_light(intensity);
         logo_count_rgb_light(side_light_table[keyboard_config.lights.ambient_brightness]);
         side_rgb_set_color(logo_led_index_tab[LOGO_LINE - 1 - i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
     }
