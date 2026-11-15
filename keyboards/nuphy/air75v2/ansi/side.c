@@ -6,6 +6,7 @@
 #include "rgb_matrix.h"
 #include "timer.h"
 #include "side.h"
+#include "lightbar_color_wave.h"
 #include "common/lighting/side_table.h"
 #include "common/config.h"
 #include "common/keyboard.h"
@@ -16,13 +17,14 @@ extern bool f_dial_sw_init_ok;
 extern void kb_config_reset(void);
 
 // clang-format off
-const uint8_t side_speed_table[6][5] = {
+const uint8_t side_speed_table[7][5] = {
     [SIDE_WAVE] = {10, 14, 20, 28, 38},
     [SIDE_MIX] = {10, 14, 20, 28, 38},
     [SIDE_BREATH] = {10, 14, 20, 28, 38},
     [SIDE_STATIC] = {50, 50, 50, 50, 50},
     [SIDE_OFF] = {50, 50, 50, 50, 50},
     [SIDE_RAINBOW_WAVE] = {3, 5, 8, 14, 25},
+    [SIDE_COLOR_WAVE] = {3, 5, 8, 14, 25},
 };
 
 const uint8_t side_light_table[6] = {
@@ -137,14 +139,14 @@ void side_color_control(uint8_t dir) {
 void side_mode_control(uint8_t dir) {
     if (dir) {
         keyboard_config.lights.side_mode++;
-        if (keyboard_config.lights.side_mode > SIDE_RAINBOW_WAVE) {
+        if (keyboard_config.lights.side_mode > SIDE_COLOR_WAVE) {
             keyboard_config.lights.side_mode = 0;
         }
     } else {
         if (keyboard_config.lights.side_mode > 0) {
             keyboard_config.lights.side_mode--;
         } else {
-            keyboard_config.lights.side_mode = SIDE_RAINBOW_WAVE;
+            keyboard_config.lights.side_mode = SIDE_COLOR_WAVE;
         }
     }
 
@@ -277,6 +279,22 @@ static void side_rainbow_wave_show(void) {
         count_rgb_light(side_light_table[keyboard_config.lights.side_brightness]);
         side_rgb_set_color(side_led_index_tab[i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
         light_point_playing(1, 32, FLOW_COLOR_TAB_LEN, &index);
+    }
+}
+
+// A single-color pulse travels upward, separated from the next by darkness.
+static void side_color_wave_show(void) {
+    static uint8_t hue;
+    if (side_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed]) return;
+    side_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed];
+    if (side_play_cnt > 20) side_play_cnt = 0;
+    side_play_point = color_wave_advance(side_play_point, &hue);
+    rgb_t rgb = nuphy_picker_hsv_rgb(hue, 255, 255);
+    for (uint8_t i = 0; i < SIDE_LINE; i++) {
+        r_temp = rgb.r; g_temp = rgb.g; b_temp = rgb.b;
+        count_rgb_light(color_wave_intensity(side_play_point, i));
+        count_rgb_light(side_light_table[keyboard_config.lights.side_brightness]);
+        side_rgb_set_color(side_led_index_tab[i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
     }
 }
 
@@ -659,6 +677,9 @@ void side_led_show(void) {
             break;
         case SIDE_STATIC:
             side_static_mode_show();
+            break;
+        case SIDE_COLOR_WAVE:
+            side_color_wave_show();
             break;
         case SIDE_RAINBOW_WAVE:
             side_rainbow_wave_show();

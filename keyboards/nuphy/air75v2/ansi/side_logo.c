@@ -4,8 +4,9 @@
 #include "timer.h"
 #include "common/config.h"
 #include "side.h"
+#include "lightbar_color_wave.h"
 
-extern const uint8_t side_speed_table[6][5];
+extern const uint8_t side_speed_table[7][5];
 extern const uint8_t side_light_table[6];
 extern const uint8_t breathe_data_tab[BREATHE_TAB_LEN];
 extern const uint8_t wave_data_tab[WAVE_TAB_LEN];
@@ -59,14 +60,14 @@ void ambient_color_control(uint8_t dir) {
 void ambient_mode_control(uint8_t dir) {
     if (dir) {
         keyboard_config.lights.ambient_mode++;
-        if (keyboard_config.lights.ambient_mode > SIDE_RAINBOW_WAVE) {
+        if (keyboard_config.lights.ambient_mode > SIDE_COLOR_WAVE) {
             keyboard_config.lights.ambient_mode = 0;
         }
     } else {
         if (keyboard_config.lights.ambient_mode > 0) {
             keyboard_config.lights.ambient_mode--;
         } else {
-            keyboard_config.lights.ambient_mode = SIDE_RAINBOW_WAVE;
+            keyboard_config.lights.ambient_mode = SIDE_COLOR_WAVE;
         }
     }
     logo_play_point = 0;
@@ -169,6 +170,21 @@ static void logo_rainbow_wave_show(void) {
     }
 }
 
+static void logo_color_wave_show(void) {
+    static uint8_t hue;
+    if (logo_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed]) return;
+    logo_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed];
+    if (logo_play_cnt > 20) logo_play_cnt = 0;
+    logo_play_point = color_wave_advance(logo_play_point, &hue);
+    rgb_t rgb = nuphy_picker_hsv_rgb(hue, 255, 255);
+    for (uint8_t i = 0; i < LOGO_LINE; i++) {
+        r_temp = rgb.r; g_temp = rgb.g; b_temp = rgb.b;
+        logo_count_rgb_light(color_wave_intensity(logo_play_point, i));
+        logo_count_rgb_light(side_light_table[keyboard_config.lights.ambient_brightness]);
+        side_rgb_set_color(logo_led_index_tab[LOGO_LINE - 1 - i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
+    }
+}
+
 static void logo_breathe_mode_show(void) {
     static uint8_t play_point = 0;
 
@@ -236,6 +252,9 @@ void logo_led_loop(void) {
             break;
         case SIDE_STATIC:
             logo_static_mode_show();
+            break;
+        case SIDE_COLOR_WAVE:
+            logo_color_wave_show();
             break;
         case SIDE_RAINBOW_WAVE:
             logo_rainbow_wave_show();
