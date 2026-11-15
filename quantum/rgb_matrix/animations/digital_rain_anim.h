@@ -13,7 +13,14 @@ bool DIGITAL_RAIN(effect_params_t* params) {
     const uint8_t pure_green_intensity = (((uint16_t)rgb_matrix_config.hsv.v) * 3) >> 2;
     const uint8_t max_brightness_boost = (((uint16_t)rgb_matrix_config.hsv.v) * 3) >> 2;
     const uint8_t max_intensity        = rgb_matrix_config.hsv.v;
-    const uint8_t decay_ticks          = 0xff / max_intensity;
+    // Zero and near-zero brightness would divide by zero below. A black
+    // frame is visually indistinguishable at these levels.
+    if (max_intensity < 2) {
+        rgb_matrix_set_color_all(0, 0, 0);
+        memset(g_rgb_frame_buffer, 0, sizeof(g_rgb_frame_buffer));
+        return false;
+    }
+    const uint8_t decay_ticks = 0xff / max_intensity;
 
     static uint8_t drop  = 0;
     static uint8_t decay = 0;
@@ -27,7 +34,7 @@ bool DIGITAL_RAIN(effect_params_t* params) {
     decay++;
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
         for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-            if (row == 0 && drop == 0 && rand() < RAND_MAX / RGB_DIGITAL_RAIN_DROPS) {
+            if (row == 0 && drop == 0 && random16() < UINT16_MAX / RGB_DIGITAL_RAIN_DROPS) {
                 // top row, pixels have just fallen and we're
                 // making a new rain drop in this column
                 g_rgb_frame_buffer[row][col] = max_intensity;
