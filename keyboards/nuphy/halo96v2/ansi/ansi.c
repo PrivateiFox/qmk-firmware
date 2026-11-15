@@ -57,8 +57,12 @@ void housekeeping_task_kb(void) {
     housekeeping_task_user();
 }
 
+extern void side_led_show(void);
+
 bool rgb_matrix_indicators_kb(void) {
     rgb_matrix_indicators_nuphy();
+    // Render the halo after the last effect chunk and before the PWM flush.
+    side_led_show();
     return rgb_matrix_indicators_user();
 }
 

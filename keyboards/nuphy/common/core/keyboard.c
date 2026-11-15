@@ -298,8 +298,12 @@ void housekeeping_task_nuphy(void) {
     long_press_key();
 
     dial_sw_scan();
-    // external from each keyboard
+    // Matrix-backed halo LEDs render with the matrix frame when it is on.
+#ifdef NUPHY_HALO_RENDER_WITH_MATRIX
+    if (!rgb_matrix_is_enabled()) side_led_show();
+#else
     side_led_show();
+#endif
 
     sleep_handle();
 }

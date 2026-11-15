@@ -36,8 +36,9 @@ static void clear_rf_queue(void) {
 
 static bool enqueue_rf_report(report_buffer_t *report) {
     uint8_t next = (queue_head + 1) % RF_QUEUE_SIZE;
-    if (next == queue_tail) { // queue is full.
-        return false;
+    if (next == queue_tail) {
+        // Keep the newest state, especially a key release, on overflow.
+        queue_tail = (queue_tail + 1) % RF_QUEUE_SIZE;
     }
     buffer_queue[queue_head] = *report;
     queue_head               = next;

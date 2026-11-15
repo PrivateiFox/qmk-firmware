@@ -71,6 +71,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define I2C1_TIMINGR_SCLL 0U
 #define I2C1_DUTY_CYCLE FAST_DUTY_CYCLE_16_9
 
+#define NUPHY_HALO_RENDER_WITH_MATRIX
+
 #define DRIVER_COUNT 2
 #define DRIVER_1_LED_TOTAL 72
 #define DRIVER_2_LED_TOTAL 72

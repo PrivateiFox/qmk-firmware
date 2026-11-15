@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rf_protocol.h"
 #include "uart.h" // qmk uart.h
 #include "rf_queue.h"
+#include "rf_frame.h"
 
 enum {
     HOST_USB_TYPE = 0,
@@ -67,6 +68,7 @@ uint32_t uart_rpt_timer   = 0;
 
 report_buffer_t report_buff_a = {0};
 report_buffer_t report_buff_b = {0};
+static report_buffer_t queued_report = {0};
 
 extern host_driver_t *m_host_driver;
 extern host_driver_t  rf_host_driver;
@@ -141,6 +143,7 @@ void clear_report_buffer(void) {
 void clear_report_buffer_and_queue(void) {
     clear_report_buffer();
     rf_queue.clear();
+    memset(&queued_report, 0, sizeof(queued_report));
 }
 
 /**
@@ -149,25 +152,27 @@ void clear_report_buffer_and_queue(void) {
 void uart_send_repeat_from_queue(void) {
     static uint32_t        dequeue_timer = 0;
     static uint32_t        repeat_timer  = 0;
-    static report_buffer_t report_buff   = {0};
     static bool            do_repeat     = true;
     if (timer_elapsed32(dequeue_timer) > 25 && !rf_queue.is_empty()) {
-        rf_queue.dequeue(&report_buff);
+        rf_queue.dequeue(&queued_report);
         dequeue_timer = timer_read32();
         // Repeat only keyboard reports. Extra reports actually repeat the keys.
-        do_repeat = (report_buff.cmd == CMD_RPT_BYTE_KB || report_buff.cmd == CMD_RPT_BIT_KB);
+        do_repeat = (queued_report.cmd == CMD_RPT_BYTE_KB || queued_report.cmd == CMD_RPT_BIT_KB);
     }
 
-    // queue is empty, continue sending from standard process.
-    if (rf_queue.is_empty()) {
-        clear_report_buffer_and_queue();
-        if (do_repeat) report_buff_a = report_buff;
-    }
+    // A cleared queue must never replay an old report or send an empty frame.
+    if (!queued_report.cmd) return;
 
-    if (report_buff.repeat == 0 || (do_repeat && timer_elapsed32(repeat_timer) > 3)) {
-        uart_send_report(report_buff.cmd, report_buff.buffer, report_buff.length);
-        // report_buff.repeat++; // NOTE: probably cause of non sleeping on conn timeout
+    if (queued_report.repeat == 0 || (do_repeat && timer_elapsed32(repeat_timer) > 3)) {
+        uart_send_report(queued_report.cmd, queued_report.buffer, queued_report.length);
+        queued_report.repeat++;
         repeat_timer = timer_read32();
+    }
+
+    if (rf_queue.is_empty()) {
+        report_buffer_t last = queued_report;
+        clear_report_buffer_and_queue();
+        if (do_repeat) report_buff_a = last;
     }
 }
 
@@ -213,28 +218,21 @@ void uart_send_report_repeat(void) {
  * @brief  Parsing the data received from the RF module.
  */
 void rf_protocol_receive(void) {
-    uint8_t i, check_sum = 0;
-
     if (Usart_Mgr.RXDState == RX_Done) {
-        sync_lost = 0;
+        nuphy_rf_frame_result_t frame = nuphy_rf_validate_frame(Usart_Mgr.RXDBuf, Usart_Mgr.RXDLen, UART_MAX_LEN);
+        if (frame == NUPHY_RF_FRAME_INVALID || frame == NUPHY_RF_FRAME_BAD_CHECKSUM) {
+            Usart_Mgr.RXDState = frame == NUPHY_RF_FRAME_BAD_CHECKSUM ? RX_SUM_ERR : RX_DATA_ERR;
+            return;
+        }
+        if (frame == NUPHY_RF_FRAME_ACK) f_uart_ack = 1;
 
-        if (RX_LEN >= UART_MAX_LEN - 4) { // is this possible? Playing it safe for undefined behaviour.
+        // Payload handlers must never read stale bytes from short or ACK frames.
+        if ((RX_CMD == CMD_RF_STS_SYSC && (Usart_Mgr.RXDLen == 3 || RX_LEN < 5)) ||
+            (RX_CMD == CMD_READ_DATA && (Usart_Mgr.RXDLen == 3 || RX_LEN < sizeof(func_tab)))) {
             Usart_Mgr.RXDState = RX_DATA_ERR;
             return;
-        } else if (Usart_Mgr.RXDLen > 4) {
-            for (i = 0; i < RX_LEN; i++)
-                check_sum += Usart_Mgr.RXDBuf[4 + i];
-
-            if (check_sum != Usart_Mgr.RXDBuf[4 + i]) {
-                Usart_Mgr.RXDState = RX_SUM_ERR;
-                return;
-            }
-        } else if (Usart_Mgr.RXDLen == 3) {
-            if (Usart_Mgr.RXDBuf[2] == 0xA0) { // Only some commands send an ACK.
-                f_uart_ack = 1;
-            }
         }
-
+        sync_lost = 0;
         Usart_Mgr.RXCmd = RX_CMD;
 
         switch (RX_CMD) {
@@ -614,7 +612,7 @@ void uart_receive_pro(void) {
     if (uart_available()) {
         wait_us(200);
         // Receiving serial data from RF module
-        while (uart_available()) {
+        for (uint8_t n = 0; n < UART_MAX_LEN && uart_available(); n++) {
             uint8_t byte = uart_read();
             if (byte == UART_HEAD) { // valid UART transaction always begins with 0x5A
                 rcv_start = true;
