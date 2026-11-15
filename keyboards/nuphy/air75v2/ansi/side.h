@@ -12,6 +12,7 @@ enum {
     SIDE_STATIC,
     SIDE_BREATH,
     SIDE_OFF,
+    SIDE_RAINBOW_WAVE,
 } side_effects;
 
 #define LIGHT_COLOR_MAX 8

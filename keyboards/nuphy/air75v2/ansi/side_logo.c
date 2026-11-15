@@ -5,7 +5,7 @@
 #include "common/config.h"
 #include "side.h"
 
-extern const uint8_t side_speed_table[5][5];
+extern const uint8_t side_speed_table[6][5];
 extern const uint8_t side_light_table[6];
 extern const uint8_t breathe_data_tab[BREATHE_TAB_LEN];
 extern const uint8_t wave_data_tab[WAVE_TAB_LEN];
@@ -59,14 +59,14 @@ void ambient_color_control(uint8_t dir) {
 void ambient_mode_control(uint8_t dir) {
     if (dir) {
         keyboard_config.lights.ambient_mode++;
-        if (keyboard_config.lights.ambient_mode > SIDE_OFF) {
+        if (keyboard_config.lights.ambient_mode > SIDE_RAINBOW_WAVE) {
             keyboard_config.lights.ambient_mode = 0;
         }
     } else {
         if (keyboard_config.lights.ambient_mode > 0) {
             keyboard_config.lights.ambient_mode--;
         } else {
-            keyboard_config.lights.ambient_mode = SIDE_OFF;
+            keyboard_config.lights.ambient_mode = SIDE_RAINBOW_WAVE;
         }
     }
     logo_play_point = 0;
@@ -110,7 +110,7 @@ static void logo_wave_mode_show(void) {
         logo_play_cnt -= side_speed_table[keyboard_config.lights.ambient_mode][keyboard_config.lights.ambient_speed];
     if (logo_play_cnt > 20) logo_play_cnt = 0;
 
-    logo_light_point_playing(0, 1, WAVE_TAB_LEN, &logo_play_point);
+    logo_light_point_playing(0, 2, WAVE_TAB_LEN, &logo_play_point);
 
     play_index = logo_play_point;
 
@@ -125,7 +125,7 @@ static void logo_wave_mode_show(void) {
 
         logo_count_rgb_light(side_light_table[keyboard_config.lights.ambient_brightness]);
 
-        side_rgb_set_color(logo_led_index_tab[i], r_temp >> 1, g_temp >> 1, b_temp >> 1);
+        side_rgb_set_color(logo_led_index_tab[LOGO_LINE - 1 - i], r_temp >> 1, g_temp >> 1, b_temp >> 1);
     }
 }
 
@@ -146,6 +146,26 @@ static void logo_spectrum_mode_show(void) {
 
     for (int i = 0; i < LOGO_LINE; i++) {
         side_rgb_set_color(logo_led_index_tab[i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
+    }
+}
+
+// Reverse LED order to match the physical direction of the side bar.
+static void logo_rainbow_wave_show(void) {
+    if (logo_play_cnt <= side_speed_table[SIDE_RAINBOW_WAVE][keyboard_config.lights.ambient_speed]) return;
+    logo_play_cnt -= side_speed_table[SIDE_RAINBOW_WAVE][keyboard_config.lights.ambient_speed];
+    if (logo_play_cnt > 20) logo_play_cnt = 0;
+    logo_light_point_playing(0, 1, FLOW_COLOR_TAB_LEN, &logo_play_point);
+    uint8_t index = logo_play_point;
+    for (int i = 0; i < LOGO_LINE; i++) {
+        r_temp = flow_rainbow_color_tab[index][0];
+        g_temp = flow_rainbow_color_tab[index][1];
+        b_temp = flow_rainbow_color_tab[index][2];
+        // Match the side bar’s warmer red-to-magenta transition.
+        if (r_temp > g_temp && r_temp >= b_temp) b_temp >>= 1;
+        if (b_temp < 16) b_temp = 0;
+        logo_count_rgb_light(side_light_table[keyboard_config.lights.ambient_brightness]);
+        side_rgb_set_color(logo_led_index_tab[LOGO_LINE - 1 - i], r_temp >> 2, g_temp >> 2, b_temp >> 2);
+        logo_light_point_playing(1, 32, FLOW_COLOR_TAB_LEN, &index);
     }
 }
 
@@ -216,6 +236,9 @@ void logo_led_loop(void) {
             break;
         case SIDE_STATIC:
             logo_static_mode_show();
+            break;
+        case SIDE_RAINBOW_WAVE:
+            logo_rainbow_wave_show();
             break;
         case SIDE_OFF:
             logo_off_mode_show();
