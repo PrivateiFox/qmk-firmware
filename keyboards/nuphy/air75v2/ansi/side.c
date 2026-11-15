@@ -41,6 +41,11 @@ bool f_charging = 1;
 
 uint8_t side_play_point = 0;
 static bool side_color_wave_active = false;
+static color_wave_state_t side_color_wave;
+
+const color_wave_state_t *side_color_wave_current(void) {
+    return &side_color_wave;
+}
 
 uint8_t low_bat_blink_cnt = 6;
 uint8_t side_play_cnt     = 0;
@@ -286,19 +291,19 @@ static void side_rainbow_wave_show(void) {
 
 // A single-color pulse travels upward, separated from the next by darkness.
 static void side_color_wave_show(void) {
-    static color_wave_state_t wave;
+    color_wave_state_t *wave = &side_color_wave;
     if (!side_color_wave_active) {
-        color_wave_init(&wave);
+        color_wave_init(wave);
         side_color_wave_active = true;
     }
     if (side_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed]) return;
     side_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.side_speed];
     if (side_play_cnt > 20) side_play_cnt = 0;
-    color_wave_advance(&wave);
-    rgb_t colors[2] = {nuphy_picker_hsv_rgb(wave.hue[0], 255, 255), nuphy_picker_hsv_rgb(wave.hue[1], 255, 255)};
+    color_wave_advance(wave);
+    rgb_t colors[2] = {nuphy_picker_hsv_rgb(wave->hue[0], 255, 255), nuphy_picker_hsv_rgb(wave->hue[1], 255, 255)};
     for (uint8_t i = 0; i < SIDE_LINE; i++) {
         uint8_t pulse;
-        uint8_t intensity = color_wave_intensity(&wave, i, &pulse);
+        uint8_t intensity = color_wave_intensity(wave, i, &pulse);
         r_temp = colors[pulse].r; g_temp = colors[pulse].g; b_temp = colors[pulse].b;
         count_rgb_light(intensity);
         count_rgb_light(side_light_table[keyboard_config.lights.side_brightness]);

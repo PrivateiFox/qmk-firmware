@@ -1,5 +1,6 @@
 // Copyright 2023 Persama (@Persama)
 // SPDX-License-Identifier: GPL-2.0-or-later
+#include <stddef.h>
 #include "rgb_matrix.h"
 #include "timer.h"
 #include "common/config.h"
@@ -14,6 +15,7 @@ extern const uint8_t flow_rainbow_color_tab[FLOW_COLOR_TAB_LEN][3];
 extern const uint8_t side_color_lib[9][3];
 extern uint8_t       r_temp, g_temp, b_temp;
 extern void          side_rgb_set_color(int index, uint8_t red, uint8_t green, uint8_t blue);
+extern const color_wave_state_t *side_color_wave_current(void);
 
 const uint8_t logo_led_index_tab[LOGO_LINE] = {
     6, 7, 8, 9, 10, 11,
@@ -174,14 +176,10 @@ static void logo_rainbow_wave_show(void) {
 
 static void logo_color_wave_show(void) {
     static color_wave_state_t wave;
-    if (!logo_color_wave_active) {
-        color_wave_init(&wave);
-        logo_color_wave_active = true;
-    }
-    if (logo_play_cnt <= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed]) return;
-    logo_play_cnt -= side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed];
-    if (logo_play_cnt > 20) logo_play_cnt = 0;
-    color_wave_advance(&wave);
+    const color_wave_state_t *leader = keyboard_config.lights.side_mode == SIDE_COLOR_WAVE ? side_color_wave_current() : NULL;
+    if (!color_wave_update_follower(&wave, &logo_color_wave_active, &logo_play_cnt,
+                                    side_speed_table[SIDE_COLOR_WAVE][keyboard_config.lights.ambient_speed], leader)) return;
+
     rgb_t colors[2] = {nuphy_picker_hsv_rgb(wave.hue[0], 255, 255), nuphy_picker_hsv_rgb(wave.hue[1], 255, 255)};
     for (uint8_t i = 0; i < LOGO_LINE; i++) {
         uint8_t pulse;
