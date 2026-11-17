@@ -212,6 +212,7 @@ void enter_deep_sleep(void) {
 
 void exit_deep_sleep(void) {
     nuphy_wireless_status_t status;
+    stm32_clock_init();
     nuphy_matrix_wake_init();
 
 #if (WORK_MODE == THREE_MODE)
@@ -226,18 +227,16 @@ void exit_deep_sleep(void) {
 
     led_pwr_wake_handle();
 
-    stm32_clock_init();
-
     if (tim6_enabled) TIM_Cmd(TIM6, ENABLE);
 
 #if (WORK_MODE == THREE_MODE)
     nuphy_rf_prepare_wakeup();
 #endif
     nuphy_wireless_get_status(&status);
-    if (status.link_mode == LINK_USB) {
-        if (USB_DRIVER.state == USB_SUSPENDED) {
-            usb_lld_wakeup_host(&USB_DRIVER);
-        }
+    if (status.link_mode == LINK_USB && USB_DRIVER.state == USB_SUSPENDED) {
+        usb_lld_wakeup_host(&USB_DRIVER);
+    } else {
+        rgb_matrix_set_suspend_state(false);
     }
 }
 
@@ -262,10 +261,10 @@ void exit_light_sleep(void) {
     nuphy_rf_prepare_wakeup();
 #endif
     nuphy_wireless_get_status(&status);
-    if (status.link_mode == LINK_USB) {
-        if (USB_DRIVER.state == USB_SUSPENDED) {
-            usb_lld_wakeup_host(&USB_DRIVER);
-        }
+    if (status.link_mode == LINK_USB && USB_DRIVER.state == USB_SUSPENDED) {
+        usb_lld_wakeup_host(&USB_DRIVER);
+    } else {
+        rgb_matrix_set_suspend_state(false);
     }
 }
 
@@ -273,6 +272,7 @@ void led_pwr_sleep_handle(void) {
     rgb_led_powered_off  = false;
     side_led_powered_off = false;
 
+    rgb_matrix_set_suspend_state(true);
     if (rgb_led_on) {
         rgb_led_powered_off = true;
         pwr_rgb_led_off();
@@ -288,9 +288,14 @@ void side_rgb_refresh(void);
 void led_pwr_wake_handle(void) {
     if (rgb_led_powered_off) {
         rgb_matrix_set_color_all(0, 0, 0);
+#if defined(DRIVER_MATRIX_CS_PIN) && defined(WS2812_PWM_DRIVER)
+        rgb_matrix_update_pwm_buffers();
+        pwr_rgb_led_on();
+#else
         pwr_rgb_led_on();
         rgb_matrix_driver.init();
         rgb_matrix_update_pwm_buffers();
+#endif
     }
     if (side_led_powered_off) {
         pwr_side_led_on();

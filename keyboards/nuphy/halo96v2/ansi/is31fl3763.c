@@ -19,6 +19,8 @@
 
 #include "is31fl3763.h"
 
+#include <string.h>
+
 #include "config.h"
 #include "gpio.h"
 #include "i2c_master.h"
@@ -33,6 +35,9 @@
 
 #define ISSI_PAGE_PWM 0x00         // PG0
 #define ISSI_PAGE_PWM_CONTROL 0x01 // PG1
+#define ISSI_PWM_CONFIGURATION 0x60
+#define ISSI_PWM_CONFIGURATION_SSD 0x01
+#define ISSI_PWM_CONFIGURATION_BASE 0x08
 
 #define ISSI_PAGE_AUTOBREATH 0x02 // PG2
 #define ISSI_PAGE_FUNCTION 0x03   // PG3
@@ -92,11 +97,6 @@ void is31fl3763_write_register(uint8_t index, uint8_t reg, uint8_t data) {
 #endif
 }
 
-uint8_t PWM_H_Tab[14][12] = {
-    {0x01, 0x02, 0x04, 0x05, 0x07, 0x08, 0x0A, 0x0B, 0X0D, 0X0E, 0X10, 0X11}, {0X13, 0X14, 0X16, 0X17, 0X19, 0X1A, 0X1C, 0X1D, 0X1F, 0X20, 0X22, 0X23}, {0X25, 0X26, 0X28, 0X29, 0X2B, 0X2C, 0X2E, 0X2F, 0X31, 0X32, 0X34, 0X35}, {0X37, 0X38, 0X3A, 0X3B, 0X3D, 0X3E, 0X40, 0X41, 0X43, 0X44, 0X46, 0X47}, {0X49, 0X4A, 0X4C, 0X4D, 0X4F, 0X50, 0X52, 0X53, 0X55, 0X56, 0X58, 0X59}, {0X5B, 0X5C, 0X5E, 0X5F, 0X61, 0X62, 0X64, 0X65, 0X67, 0X68, 0X6A, 0X6B}, {0X6D, 0X6E, 0X70, 0X71, 0X73, 0X74, 0X76, 0X77, 0X79, 0X7A, 0X7C, 0X7D},
-    {0X7F, 0X80, 0X82, 0X83, 0X85, 0X86, 0X88, 0X89, 0X8B, 0X8C, 0X8E, 0X8F}, {0x91, 0x92, 0x94, 0x95, 0x97, 0x98, 0x9A, 0x9B, 0X9D, 0X9E, 0XA0, 0XA1}, {0XA3, 0XA4, 0XA6, 0XA7, 0XA9, 0XAA, 0XAC, 0XAD, 0XAF, 0XB0, 0XB2, 0XB3}, {0XB5, 0XB6, 0XB8, 0XB9, 0XBB, 0XBC, 0XBE, 0XBF, 0XC1, 0XC2, 0XC4, 0XC5}, {0XC7, 0XC8, 0XCA, 0XCB, 0XCD, 0XCE, 0XD0, 0XD1, 0XD3, 0XD4, 0XD6, 0XD7}, {0XD9, 0XDA, 0XDC, 0XDD, 0XDF, 0XE0, 0XE2, 0XE3, 0XE5, 0XE6, 0XE8, 0XE9}, {0XEB, 0XEC, 0XEE, 0XEF, 0XF1, 0XF2, 0XF4, 0XF5, 0XF7, 0XF8, 0XFA, 0XFB},
-};
-
 void is31fl3763_write_pwm_buffer(uint8_t index) {
     uint16_t addr_sart = 0;
 
@@ -135,35 +135,22 @@ void is31fl3763_init_drivers(void) {
 
     for (uint8_t i = 0; i < DRIVER_COUNT; i++) {
         is31fl3763_update_led_control_registers(i);
+        memset(g_pwm_buffer[i], 0, sizeof(g_pwm_buffer[i]));
+        is31fl3763_write_pwm_buffer(i);
+        g_pwm_buffer_update_required[i] = false;
+        is31fl3763_write_register(i, ISSI_COMMANDREGISTER_WRITELOCK, 0xC5);
+        is31fl3763_write_register(i, ISSI_COMMANDREGISTER, ISSI_PAGE_PWM_CONTROL);
+        is31fl3763_write_register(i, ISSI_PWM_CONFIGURATION, ISSI_PWM_CONFIGURATION_BASE | ISSI_PWM_CONFIGURATION_SSD);
     }
 }
 
 void is31fl3763_init(uint8_t index) {
-    uint8_t i, j;
-
-    is31fl3763_write_register(index, ISSI_COMMANDREGISTER_WRITELOCK, 0xC5);
-    is31fl3763_write_register(index, ISSI_COMMANDREGISTER, ISSI_PAGE_PWM);
-
-    for (i = 0; i < 14; i++) {
-        for (j = 0; j < 12; j++) {
-            is31fl3763_write_register(index, PWM_H_Tab[i][j], 0X00);
-        }
-    }
-
     is31fl3763_write_register(index, ISSI_COMMANDREGISTER_WRITELOCK, 0xC5);
     is31fl3763_write_register(index, ISSI_COMMANDREGISTER, ISSI_PAGE_PWM_CONTROL);
+    is31fl3763_write_register(index, ISSI_PWM_CONFIGURATION, ISSI_PWM_CONFIGURATION_BASE);
 
-    for (i = 0; i < 4; i++) {
-        for (j = 0; j < 12; j++) {
-            is31fl3763_write_register(index, PWM_H_Tab[i][j], 0X00);
-        }
-    }
-
-    is31fl3763_write_register(index, ISSI_COMMANDREGISTER_WRITELOCK, 0xC5);
-    is31fl3763_write_register(index, ISSI_COMMANDREGISTER, ISSI_PAGE_PWM_CONTROL);
     is31fl3763_write_register(index, 0x62, 0x66);
     is31fl3763_write_register(index, 0x61, ISSI_GLOBALCURRENT);
-    is31fl3763_write_register(index, 0x60, 0x09);
 
     is31fl3763_write_register(index, 0x63, 0x00);
 

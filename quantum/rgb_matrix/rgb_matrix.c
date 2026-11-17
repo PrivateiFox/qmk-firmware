@@ -528,11 +528,17 @@ void rgb_matrix_init(void) {
 
 void rgb_matrix_set_suspend_state(bool state) {
 #ifdef RGB_MATRIX_SLEEP
-    if (state && !suspend_state) { // only run if turning off, and only once
-        rgb_task_render(0);        // turn off all LEDs when suspending
-        rgb_task_flush(0);         // and actually flash led state to LEDs
+    if (state == suspend_state) {
+        return;
     }
     suspend_state = state;
+    if (state) {
+        rgb_current_effect = RGB_MATRIX_NONE;
+        rgb_matrix_set_color_all(0, 0, 0);
+        rgb_task_flush(RGB_MATRIX_NONE);
+    } else {
+        rgb_task_state = STARTING;
+    }
 #endif
 }
 
